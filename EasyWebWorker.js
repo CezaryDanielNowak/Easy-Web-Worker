@@ -72,26 +72,27 @@ EasyWorker = (function(root) {
     this.rawWorker.addEventListener("error", function() {
       console.log("WORKER ERROR: ", arguments);
     }, false);
-    
-    this.msg = function(data) {
-      this.rawWorker.postMessage(typeof data === 'string' ? data : JSON.stringify(data));
-      return this;
-    };
-    this.onDoneFunc = function() {
-      console.log('WORKER DONE, RESULT: ', arguments);
-    }
-    this.onDone = function(func) {
-      this.onDoneFunc = func;
-      return this;
-    };
 
     return this;
+  };
+  
+  WorkerCreator.prototype = {
+    msg: function(data) {
+      this.rawWorker.postMessage(typeof data === 'string' ? data : JSON.stringify(data));
+      return this;
+    },
+    onDoneFunc: function() {
+      console.log('WORKER DONE, RESULT: ', arguments);
+    },
+    onDone: function(func) {
+      this.onDoneFunc = func;
+      return this;
+    }
   };
   return function(script, options) {
     return new WorkerCreator(script, options);
   }
 })(window);
-
 
 var test = EasyWorker(function(a,b,c) {
   /* do some calculations */
