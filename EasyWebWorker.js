@@ -70,7 +70,7 @@ EasyWorker = (function(root) {
     }, false);
     
     this.rawWorker.addEventListener("error", function() {
-      console.log("WORKER ERROR: ", arguments);
+      _this.onErrorFunc.apply(_this, arguments);
     }, false);
 
     return this;
@@ -86,6 +86,17 @@ EasyWorker = (function(root) {
     },
     onDone: function(func) {
       this.onDoneFunc = func;
+      return this;
+    },
+    onErrorFunc: function() {
+      console.log("WORKER ERROR: ", arguments);
+    },
+    onError: function(func) {
+      this.onErrorFunc = func;
+      return this;
+    },
+    close: function() {
+      this.rawWorker.terminate();
       return this;
     }
   };
