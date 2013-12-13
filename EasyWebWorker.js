@@ -4,7 +4,10 @@ EasyWorker = (function(root) {
       // Web Workers not defined. TODO: make fallback function for that
     };
   }
-  var WorkerCreator = function(data) {
+  var WorkerCreator = function(data, options) {
+    if(!options) {
+      options = {}
+    }
     if(typeof data !== 'function') {
       throw new Error('EasyWorker data parameter must contain function.');
       return false;
@@ -32,8 +35,16 @@ EasyWorker = (function(root) {
         self.postMessage(msg.data);
       };
     };
-    data = 'data:text/javascript;charset=UTF-8,(' + head_scripts + ')();(' + encodeURIComponent(data) + ')();';
+    data = 'data:text/javascript;charset=UTF-8,(' + encodeURIComponent(head_scripts + ')();self.WorkerFunction = ' + data + ';');
+    
+    if(options.autoStart) {
+      if(!(options.argumentsOnAutoStart instanceof Array)) {
+        throw new Error('argumentsOnAutoStart option need to be Array');
+      }
+      data += encodeURIComponent('self.WorkerFunction.apply(self, '+ (options.argumentsOnAutoStart ? JSON.stringify(options.argumentsOnAutoStart) : '[]') +');');
+    }
     this.rawWorker = new root.Worker(data);
+    
     this.rawWorker.addEventListener("message", function(e) {
       var isObject = false, data;
       try {
@@ -47,23 +58,28 @@ EasyWorker = (function(root) {
       }
       console.log('Response from Worker: ', data);
     }, false);
+    
     this.rawWorker.addEventListener("error", function() {
       console.log("WORKER ERROR: ", arguments);
     }, false);
+    
     this.msg = function(data) {
       test.rawWorker.postMessage(typeof data === 'string' ? data : JSON.stringify(data))
     };
     return this;
   };
-  return function(script) {
-    return new WorkerCreator(script);
+  return function(script, options) {
+    return new WorkerCreator(script, options);
   }
 })(window);
 
 
 var test = EasyWorker(function() {
   /* TODO: make communication layer like in jQuery: .success, .error, .when */
-  console.log('it\'s alive !');
+  console.log('it\'s alive !', Array.slice(arguments));
+}, {
+  autoStart: true,
+  argumentsOnAutoStart: [1,2,3] 
 });
 
 
