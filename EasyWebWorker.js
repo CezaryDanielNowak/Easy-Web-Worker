@@ -23,16 +23,21 @@ EasyWorker = (function(root) {
               self.postMessage(JSON.stringify({
                 'easyWorkerMessageType': 'console',
                 'easyWorkerMessageMethod': method,
-                'easyWorkerMessageData': arguments
+                'easyWorkerMessageData': Array.slice(arguments)
               }));
             };
           })(method);
         }
         return console;
       })( 'assert,count,debug,dir,dirxml,error,exception,group,groupCollapsed,groupEnd,info,log,markTimeline,profile,profileEnd,time,timeEnd,trace,warn'.split(',') );
-
+      self.done = function() {
+        self.postMessage(JSON.stringify({
+          'easyWorkerMessageType': 'done',
+          'easyWorkerMessageData': Array.slice(arguments)
+        }));
+      };
       self.onmessage = function(msg) {
-        self.postMessage(msg.data);
+        self.postMessage('thanks for msg! It\'s your message: ' + msg.data);
       };
     };
     data = 'data:text/javascript;charset=UTF-8,(' + encodeURIComponent(head_scripts + ')();self.WorkerFunction = ' + data + ';');
@@ -44,17 +49,22 @@ EasyWorker = (function(root) {
       data += encodeURIComponent('self.WorkerFunction.apply(self, '+ (options.argumentsOnAutoStart ? JSON.stringify(options.argumentsOnAutoStart) : '[]') +');');
     }
     this.rawWorker = new root.Worker(data);
-    
+    var _this = this;
     this.rawWorker.addEventListener("message", function(e) {
       var isObject = false, data;
       try {
         data = JSON.parse(e.data);
         isObject = true;
-      } catch (e) {
+      } catch (err) {
         data = e.data;
       }
-      if(isObject && data.easyWorkerMessageType === 'console') {
-        return console[data.easyWorkerMessageMethod]('WORKER CONSOLE: ', data.easyWorkerMessageData);
+      if(isObject) {
+        if(data.easyWorkerMessageType === 'done') {
+          return _this.onDoneFunc.apply(_this, data.easyWorkerMessageData);
+        }
+        else if(data.easyWorkerMessageType === 'console') {
+          return console[data.easyWorkerMessageMethod]('WORKER CONSOLE: ', data.easyWorkerMessageData);
+        }
       }
       console.log('Response from Worker: ', data);
     }, false);
@@ -64,8 +74,17 @@ EasyWorker = (function(root) {
     }, false);
     
     this.msg = function(data) {
-      test.rawWorker.postMessage(typeof data === 'string' ? data : JSON.stringify(data))
+      this.rawWorker.postMessage(typeof data === 'string' ? data : JSON.stringify(data));
+      return this;
     };
+    this.onDoneFunc = function() {
+      console.log('WORKER DONE, RESULT: ', arguments);
+    }
+    this.onDone = function(func) {
+      this.onDoneFunc = func;
+      return this;
+    };
+
     return this;
   };
   return function(script, options) {
@@ -74,12 +93,21 @@ EasyWorker = (function(root) {
 })(window);
 
 
-var test = EasyWorker(function() {
-  /* TODO: make communication layer like in jQuery: .success, .error, .when */
-  console.log('it\'s alive !', Array.slice(arguments));
+var test = EasyWorker(function(a,b,c) {
+  /* do some calculations */
+  var result = [];
+  for(var i = 10; i--;) {
+    result.push('element' + i);
+  }
+  
+  console.log('uff almost ready...');
+  done(result);
 }, {
   autoStart: true,
-  argumentsOnAutoStart: [1,2,3] 
+  argumentsOnAutoStart: [1,2,3]
+})
+.onDone(function(responseResult) {
+  console.log('Yay, I\'ve received some data from worker:', responseResult);
 });
 
 
