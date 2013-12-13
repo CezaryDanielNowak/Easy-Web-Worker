@@ -1,16 +1,18 @@
-EasyWorker = (function(root) {
+'use strict';
+
+var EasyWorker = (function(root) {
   if(!root.Worker) {
     root.Worker = function(){
       // Web Workers not defined. TODO: make fallback function for that
     };
   }
   var WorkerCreator = function(data, options) {
+    // TODO: support transferable objects (?)
     if(!options) {
-      options = {}
+      options = {};
     }
     if(typeof data !== 'function') {
       throw new Error('EasyWorker data parameter must contain function.');
-      return false;
     }
     /* XXX: Don't use inline comments in head_scripts block */
     var head_scripts = function() {
@@ -29,18 +31,35 @@ EasyWorker = (function(root) {
           })(method);
         }
         return console;
-      })( 'assert,count,debug,dir,dirxml,error,exception,group,groupCollapsed,groupEnd,info,log,markTimeline,profile,profileEnd,time,timeEnd,trace,warn'.split(',') );
+      })('assert,count,debug,dir,dirxml,error,exception,group,groupCollapsed,groupEnd,info,log,markTimeline,profile,profileEnd,time,timeEnd,trace,warn'.split(','));
+
       self.done = function() {
         self.postMessage(JSON.stringify({
           'easyWorkerMessageType': 'done',
           'easyWorkerMessageData': Array.slice(arguments)
         }));
       };
+
+      var messageCallbacks = {};
+      self.onMsg = function(type, func) {
+        if(arguments.length < 2) {
+          func = type;
+          type = 'default';
+        }
+        messageCallbacks[type] = func;
+      };
       self.onmessage = function(msg) {
-        self.postMessage('thanks for msg! It\'s your message: ' + msg.data);
+        var data;
+        try {
+          data = JSON.parse(msg.data);
+        } catch (err) {
+          console.error('wrong data passed in msg', msg.data);
+          return;
+        }
+        return typeof messageCallbacks[data.type] === 'function' ? messageCallbacks[data.type].call(this, data.data) : null;
       };
     };
-    data = 'data:text/javascript;charset=UTF-8,(' + encodeURIComponent(head_scripts + ')();self.WorkerFunction = ' + data + ';');
+    data = 'data:text/javascript;charset=UTF-8,' + encodeURIComponent('(' + head_scripts + ')();self.WorkerFunction = ' + data + ';');
     
     if(options.autoStart) {
       if(!(options.argumentsOnAutoStart instanceof Array)) {
@@ -66,6 +85,7 @@ EasyWorker = (function(root) {
           return console[data.easyWorkerMessageMethod]('WORKER CONSOLE: ', data.easyWorkerMessageData);
         }
       }
+      // XXX: debug, remove it when lib is finished
       console.log('Response from Worker: ', data);
     }, false);
     
@@ -77,8 +97,12 @@ EasyWorker = (function(root) {
   };
   
   WorkerCreator.prototype = {
-    msg: function(data) {
-      this.rawWorker.postMessage(typeof data === 'string' ? data : JSON.stringify(data));
+    msg: function(type, data) {
+      if(arguments.length < 2) {
+        data = type;
+        type = 'default';
+      }
+      this.rawWorker.postMessage( JSON.stringify( {type:type, data:data}) );
       return this;
     },
     onDoneFunc: function() {
@@ -102,25 +126,25 @@ EasyWorker = (function(root) {
   };
   return function(script, options) {
     return new WorkerCreator(script, options);
-  }
+  };
 })(window);
 
-var test = EasyWorker(function(a,b,c) {
+var test = EasyWorker(function(count) {
   /* do some calculations */
   var result = [];
-  for(var i = 10; i--;) {
+  for(var i = count; i--;) {
     result.push('element' + i);
   }
-  
+  onMsg('default', function(msg) {
+    postMessage('thanks for msg! It\'s your message: ' + JSON.stringify(msg));
+  });
   console.log('uff almost ready...');
   done(result);
 }, {
   autoStart: true,
-  argumentsOnAutoStart: [1,2,3]
-})
-.onDone(function(responseResult) {
+  argumentsOnAutoStart: [10]
+}).onDone(function(responseResult) {
   console.log('Yay, I\'ve received some data from worker:', responseResult);
 });
 
-
-test.msg({"pretty message": "pretty message content"}); // start the worker.
+test.msg('default', {"pretty message": "pretty message content"});
